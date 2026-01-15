@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送v1.0</title>
+    <title>山の配送v1.1</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -17,6 +17,10 @@
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
         
+        /* 緯度経度用の横並びスタイル */
+        .coord-row { display: flex; gap: 10px; }
+        .coord-row input { width: 50%; }
+
         button { margin-top: 10px; padding: 12px; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; color: white; transition: opacity 0.2s; }
         button:active { opacity: 0.7; }
         .btn-gps { background-color: #0288d1; width: 100%; }
@@ -52,15 +56,17 @@
 </head>
 <body>
 
-    <h1>🌲 山の配送v1.0</h1>
+    <h1>🌲 山の配送v1.1</h1>
 
     <div class="input-group">
         <button class="btn-gps" onclick="getLocation()">（1）現在地を取得</button>
-        <p id="status-info" style="font-size: 0.8rem; color: #666; margin: 5px 0;">座標: 未取得</p>
+        <p id="status-info" style="font-size: 0.8rem; color: #666; margin: 5px 0;">座標: 未取得（ボタンまたは手入力）</p>
         
-        <input type="hidden" id="lat">
-        <input type="hidden" id="lng">
-
+        <label>座標入力（GPSボタンで自動入力可）</label>
+        <div class="coord-row">
+            <input type="number" id="lat" step="any" placeholder="緯度 (例:35.123)">
+            <input type="number" id="lng" step="any" placeholder="経度 (例:139.456)">
+        </div>
         <label>（2）丸太情報入力</label>
         <input type="number" id="count" placeholder="本数">
         <input type="number" id="volume" step="0.001" placeholder="材積（m3）">
@@ -117,6 +123,7 @@
             navigator.geolocation.getCurrentPosition((position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
+                // ここで入力欄に値をセットします（これにより手動入力と同じ扱いになります）
                 document.getElementById('lat').value = lat;
                 document.getElementById('lng').value = lng;
                 info.textContent = `取得完了: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -127,14 +134,15 @@
 
         // --- データ保存 ---
         function saveData() {
+            // 手動入力またはGPSでセットされた値を取得
             const lat = document.getElementById('lat').value;
             const lng = document.getElementById('lng').value;
             const count = document.getElementById('count').value;
             const volume = document.getElementById('volume').value;
             const memo = document.getElementById('memo').value;
 
-            if (!lat || !count || !volume) {
-                alert("位置、本数、材積は必須です");
+            if (!lat || !lng || !count || !volume) {
+                alert("位置（緯度・経度）、本数、材積は必須です");
                 return;
             }
 
@@ -158,6 +166,13 @@
         }
 
         function clearForm() {
+            // 保存後、座標もクリアするかは運用の好みですが、
+            // 連続入力の可能性を考え、座標は残し、丸太情報だけクリアするのが便利かもしれません。
+            // 今回は以前の仕様通りすべてクリアせず、丸太情報のみクリアします。
+            // もし座標もクリアしたい場合は以下のコメントアウトを外してください。
+            // document.getElementById('lat').value = "";
+            // document.getElementById('lng').value = "";
+            
             document.getElementById('count').value = "";
             document.getElementById('volume').value = "";
             document.getElementById('memo').value = "";
@@ -210,8 +225,7 @@
             const item = dataList.find(d => d.id === id);
             if (!item) return;
 
-            // 修正：標準的なGoogleマップURL形式に変更
-            // 末尾に +(情報) を付けることで、一部の環境で検索バーに情報が表示されます
+            // 標準的なGoogleマップURL形式
             const mapUrl = `https://maps.google.com/?q=${item.lat},${item.lng}`;
             
             const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n${mapUrl}`;
@@ -234,7 +248,7 @@
             if (!map) {
                 map = L.map('map');
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
+                    attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
             }
 
@@ -297,7 +311,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `yama_delivery_v0.2_${new Date().getTime()}.csv`;
+            link.download = `yama_delivery_v1.1_${new Date().getTime()}.csv`;
             link.click();
         }
 
@@ -329,6 +343,4 @@
         }
     </script>
 </body>
-
 </html>
-
