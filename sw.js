@@ -1,7 +1,7 @@
 const CACHE_NAME = 'log-delivery-v1.1-cache';
 const urlsToCache = [
   './',
-  './index.html', // HTMLファイル名が違う場合は変更してください
+  './index.html', // HTMLファイル名がindex.htmlでない場合はここを修正
   './manifest.json',
   './icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -10,6 +10,9 @@ const urlsToCache = [
 
 // インストール時にキャッシュする
 self.addEventListener('install', (event) => {
+  // ★追加: 待機状態をスキップして即座に有効化する
+  self.skipWaiting();
+
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -33,17 +36,21 @@ self.addEventListener('fetch', (event) => {
 // 新しいバージョンがでたら古いキャッシュを削除する
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
+  
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // ★追加: 更新後、すぐにページをコントロール下に置く
+      clients.claim(),
+      
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheWhitelist.indexOf(cacheName) === -1) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
   );
-
 });
-
