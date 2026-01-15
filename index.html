@@ -3,32 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送アプリ</title>
+    <title>山の配送v0.1</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f0f4f0; }
-        h1 { color: #2e7d32; font-size: 1.5rem; }
+        body { font-family: sans-serif; margin: 20px; background-color: #f0f4f0; color: #333; }
+        h1 { color: #2e7d32; font-size: 1.5rem; border-bottom: 2px solid #2e7d32; padding-bottom: 5px; }
         .input-group { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
-        button { margin-top: 15px; padding: 12px; width: 100%; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; color: white; }
-        .btn-gps { background-color: #0288d1; }
-        .btn-save { background-color: #2e7d32; }
-        .btn-request { background-color: #f57c00; width: auto; padding: 5px 10px; font-size: 0.8rem; }
-        .btn-delete { background-color: #d32f2f; width: auto; padding: 5px 10px; font-size: 0.8rem; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 0.85rem; }
+        button { margin-top: 10px; padding: 12px; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; color: white; transition: opacity 0.2s; }
+        button:active { opacity: 0.7; }
+        .btn-gps { background-color: #0288d1; width: 100%; }
+        .btn-save { background-color: #2e7d32; width: 100%; margin-top: 20px; }
+        
+        .admin-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .btn-csv { background-color: #546e7a; flex: 1; font-size: 0.8rem; }
+        .btn-clear { background-color: #8d6e63; flex: 1; font-size: 0.8rem; }
+
+        .btn-request { background-color: #f57c00; font-size: 0.75rem; padding: 5px; }
+        .btn-status { background-color: #7b1fa2; font-size: 0.75rem; padding: 5px; }
+        .btn-finish { background-color: #455a64; font-size: 0.75rem; padding: 5px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 0.8rem; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #e8f5e9; }
-        .scroll-container { overflow-x: auto; }
+        th { background-color: #e8f5e9; position: sticky; top: 0; }
+        
+        /* ステータス別の背景色 */
+        .status-default { background-color: #fff; }
+        .status-scheduled { background-color: #fff9c4; } /* 薄い黄色 */
+        .status-completed { background-color: #cfd8dc; color: #78909c; text-decoration: line-through; } /* 薄いグレー */
+
+        .scroll-container { overflow-x: auto; max-height: 400px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
 
-    <h1>🌲 山の配送依頼</h1>
+    <h1>🌲 山の配送v0.1</h1>
 
     <div class="input-group">
         <button class="btn-gps" onclick="getLocation()">（1）現在地を取得</button>
-        <p id="status" style="font-size: 0.8rem; color: #666;">座標: 未取得</p>
+        <p id="status-info" style="font-size: 0.8rem; color: #666; margin: 5px 0;">座標: 未取得</p>
         
         <input type="hidden" id="lat">
         <input type="hidden" id="lng">
@@ -36,12 +50,16 @@
         <label>（2）丸太情報入力</label>
         <input type="number" id="count" placeholder="本数（整数）">
         <input type="number" id="volume" step="0.001" placeholder="材積（m3）">
-        <textarea id="memo" rows="3" placeholder="備考欄（現場状況など）"></textarea>
+        <textarea id="memo" rows="2" placeholder="備考欄（現場状況など）"></textarea>
 
         <button class="btn-save" onclick="saveData()">（3）データを保存</button>
     </div>
 
-    <h2>データ一覧</h2>
+    <div class="admin-controls">
+        <button class="btn-csv" onclick="exportCSV()">CSV出力</button>
+        <button class="btn-clear" onclick="clearAllData()">全データ一括削除</button>
+    </div>
+
     <div class="scroll-container">
         <table id="dataTable">
             <thead>
@@ -62,24 +80,24 @@
     <script>
         // GPS取得
         function getLocation() {
-            const status = document.getElementById('status');
+            const info = document.getElementById('status-info');
             if (!navigator.geolocation) {
-                status.textContent = "お使いのブラウザはGPS未対応です";
+                info.textContent = "GPS未対応ブラウザです";
                 return;
             }
-            status.textContent = "取得中...";
+            info.textContent = "位置情報取得中...";
             navigator.geolocation.getCurrentPosition((position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
                 document.getElementById('lat').value = lat;
                 document.getElementById('lng').value = lng;
-                status.textContent = `取得完了: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                info.textContent = `取得完了: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
             }, () => {
-                status.textContent = "座標が取得できませんでした";
+                info.textContent = "座標が取得できませんでした";
             });
         }
 
-        // データの保存
+        // 保存
         function saveData() {
             const lat = document.getElementById('lat').value;
             const lng = document.getElementById('lng').value;
@@ -88,25 +106,25 @@
             const memo = document.getElementById('memo').value;
 
             if (!lat || !count || !volume) {
-                alert("位置情報、本数、材積は必須です");
+                alert("位置、本数、材積は必須です");
                 return;
             }
 
             const now = new Date();
-            const timestamp = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            const timestamp = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
 
             const newData = {
                 id: Date.now(),
                 timestamp,
-                lat, lng, count, volume, memo
+                lat, lng, count, volume, memo,
+                status: 'default' // default, scheduled, completed
             };
 
-            // LocalStorageから取得して追加
-            const dataList = JSON.parse(localStorage.getItem('deliveryData') || '[]');
+            const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             dataList.push(newData);
-            localStorage.setItem('deliveryData', JSON.stringify(dataList));
+            localStorage.setItem('yamaDeliveryData', JSON.stringify(dataList));
 
-            alert("データを保存しました");
+            alert("保存しました");
             clearForm();
             renderTable();
         }
@@ -117,64 +135,82 @@
             document.getElementById('memo').value = "";
         }
 
-        // テーブルの描画
+        // テーブル表示
         function renderTable() {
-            const dataList = JSON.parse(localStorage.getItem('deliveryData') || '[]');
+            const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             const tbody = document.querySelector('#dataTable tbody');
             tbody.innerHTML = "";
 
             dataList.forEach(item => {
                 const row = document.createElement('tr');
+                row.className = `status-${item.status}`;
                 row.innerHTML = `
                     <td>${item.timestamp}</td>
-                    <td>${parseFloat(item.lat).toFixed(4)}, ${parseFloat(item.lng).toFixed(4)}</td>
+                    <td>${parseFloat(item.lat).toFixed(4)},<br>${parseFloat(item.lng).toFixed(4)}</td>
                     <td>${item.count}</td>
                     <td>${item.volume}</td>
                     <td>${item.memo}</td>
                     <td>
-                        <button class="btn-request" onclick="sendEmail(${item.id})">配送依頼</button>
-                        <button class="btn-delete" onclick="deleteData(${item.id})">削除</button>
+                        <button class="btn-request" onclick="sendEmail(${item.id})">依頼</button>
+                        <button class="btn-status" onclick="updateStatus(${item.id}, 'scheduled')">予定</button>
+                        <button class="btn-finish" onclick="updateStatus(${item.id}, 'completed')">終了</button>
                     </td>
                 `;
                 tbody.appendChild(row);
             });
         }
 
-        // メール送信（配送依頼）
+        // ステータス更新
+        function updateStatus(id, newStatus) {
+            let dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
+            const index = dataList.findIndex(d => d.id === id);
+            if (index !== -1) {
+                dataList[index].status = newStatus;
+                localStorage.setItem('yamaDeliveryData', JSON.stringify(dataList));
+                renderTable();
+            }
+        }
+
+        // メール送信
         function sendEmail(id) {
-            const dataList = JSON.parse(localStorage.getItem('deliveryData') || '[]');
+            const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             const item = dataList.find(d => d.id === id);
             if (!item) return;
 
-            const subject = encodeURIComponent(`【配送依頼】丸太輸送のお願い (${item.timestamp})`);
-            
-            // Googleマップのリンク作成 (ピンに情報を表示させるためのフォーマット)
-            // q=緯度,経度(ラベル名) という形式
-            const mapUrl = `https://maps.google.com/maps?q=${item.lat},${item.lng}(材積:${item.volume}m3/${item.count}本)`;
+            const mapUrl = `https://www.google.com/maps?q=${item.lat},${item.lng}(材積:${item.volume}m3/${item.count}本)`;
+            const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n${mapUrl}`;
 
-            const bodyText = `配送依頼の詳細をお送りします。\n\n` +
-                             `■依頼日時: ${item.timestamp}\n` +
-                             `■丸太本数: ${item.count} 本\n` +
-                             `■合計材積: ${item.volume} m3\n` +
-                             `■備考: ${item.memo}\n\n` +
-                             `■場所（Googleマップ）:\n${mapUrl}\n\n` +
-                             `ご確認のほど、よろしくお願いいたします。`;
-
-            const mailtoUrl = `mailto:?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
-            
-            window.location.href = mailtoUrl;
+            window.location.href = `mailto:?subject=配送依頼_${item.timestamp}&body=${encodeURIComponent(bodyText)}`;
         }
 
-        // データ削除
-        function deleteData(id) {
-            if (!confirm("このデータを削除してもよろしいですか？")) return;
-            let dataList = JSON.parse(localStorage.getItem('deliveryData') || '[]');
-            dataList = dataList.filter(d => d.id !== id);
-            localStorage.setItem('deliveryData', JSON.stringify(dataList));
-            renderTable();
+        // CSV出力
+        function exportCSV() {
+            const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
+            if (dataList.length === 0) {
+                alert("データがありません");
+                return;
+            }
+
+            let csvContent = "\uFEFF日時,緯度,経度,本数,材積,備考,ステータス\n";
+            dataList.forEach(d => {
+                csvContent += `${d.timestamp},${d.lat},${d.lng},${d.count},${d.volume},"${d.memo.replace(/"/g, '""')}",${d.status}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `yama_delivery_data_${new Date().getTime()}.csv`;
+            link.click();
         }
 
-        // 起動時にテーブルを表示
+        // 一括削除
+        function clearAllData() {
+            if (confirm("全てのデータを削除します。CSV出力は済みましたか？")) {
+                localStorage.removeItem('yamaDeliveryData');
+                renderTable();
+            }
+        }
+
         renderTable();
     </script>
 </body>
