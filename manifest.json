@@ -1,0 +1,15 @@
+{
+  "name": "山の配送アプリ",
+  "short_name": "山の配送",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f0f4f0",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
