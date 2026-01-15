@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送v1.1</title>
+    <title>山の配送v1.2</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -31,9 +31,12 @@
         .btn-clear { background-color: #8d6e63; flex: 1; font-size: 0.9rem; min-width: 80px; }
         .btn-map { background-color: #00897b; flex: 1; font-size: 0.9rem; min-width: 80px; }
 
+        /* 行内の操作ボタン */
+        .action-buttons { display: flex; flex-direction: column; gap: 5px; }
         .btn-request { background-color: #f57c00; font-size: 0.75rem; padding: 5px 10px; }
         .btn-status { background-color: #7b1fa2; font-size: 0.75rem; padding: 5px 10px; }
         .btn-finish { background-color: #455a64; font-size: 0.75rem; padding: 5px 10px; }
+        .btn-delete { background-color: #d32f2f; font-size: 0.75rem; padding: 5px 10px; } /* 赤色 */
         
         .instructions { background: #e3f2fd; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; border-left: 5px solid #2196f3; }
         .instructions p { margin: 5px 0; line-height: 1.4; }
@@ -44,7 +47,7 @@
         .close-map { background: #ccc; color: #333; text-align: center; padding: 5px; cursor: pointer; font-size: 0.9rem; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 0.8rem; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
         th { background-color: #e8f5e9; position: sticky; top: 0; }
         
         .status-default { background-color: #fff; }
@@ -56,16 +59,16 @@
 </head>
 <body>
 
-    <h1>🌲 山の配送v1.1</h1>
+    <h1>🌲 山の配送v1.2</h1>
 
     <div class="input-group">
         <button class="btn-gps" onclick="getLocation()">（1）現在地を取得</button>
         <p id="status-info" style="font-size: 0.8rem; color: #666; margin: 5px 0;">座標: 未取得（ボタンまたは手入力）</p>
         
-        <label>座標入力（GPSボタンで自動入力可）</label>
+        <label>座標入力（度単位・小数第6位まで）</label>
         <div class="coord-row">
-            <input type="number" id="lat" step="any" placeholder="緯度 (例:35.123)">
-            <input type="number" id="lng" step="any" placeholder="経度 (例:139.456)">
+            <input type="number" id="lat" step="0.000001" placeholder="緯度 (例:35.123456)">
+            <input type="number" id="lng" step="0.000001" placeholder="経度 (例:139.654321)">
         </div>
         <label>（2）丸太情報入力</label>
         <input type="number" id="count" placeholder="本数">
@@ -76,11 +79,12 @@
     </div>
 
     <div class="instructions">
-        <p>（4）データ一覧で進捗管理（各ボタンを押してください）</p>
-        <p>　1.[依頼]でメールが起動、宛先を選んで送信</p>
-        <p>　2.荷受連絡が来たら[予定]（黄色になります）</p>
-        <p>　3.荷受が終了したら[終了]（見え消しになります）</p>
-        <p>　4.[位置を確認]で進捗可視化（未定;赤,予定;黄,終了;灰、※圏内で確認してください）</p>
+        <p>（4）データ一覧で進捗管理</p>
+        <p>　・[依頼] メール起動</p>
+        <p>　・[予定] 荷受連絡あり（黄色）</p>
+        <p>　・[終了] 完了（見え消し）</p>
+        <p>　・[削除] 行データを削除</p>
+        <p>　・[位置を確認] 地図で状況可視化</p>
     </div>
 
     <div id="map-container">
@@ -90,7 +94,7 @@
 
     <div class="admin-controls">
         <button class="btn-csv" onclick="exportCSV()">CSV出力</button>
-        <button class="btn-clear" onclick="clearAllData()">一括削除</button>
+        <button class="btn-clear" onclick="clearAllData()">全データ一括削除</button>
         <button class="btn-map" onclick="showAllMap()">位置を確認</button>
     </div>
 
@@ -123,7 +127,7 @@
             navigator.geolocation.getCurrentPosition((position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                // ここで入力欄に値をセットします（これにより手動入力と同じ扱いになります）
+                // GPS取得時は、inputタグのstep制限に関わらず値をセットします
                 document.getElementById('lat').value = lat;
                 document.getElementById('lng').value = lng;
                 info.textContent = `取得完了: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -134,7 +138,6 @@
 
         // --- データ保存 ---
         function saveData() {
-            // 手動入力またはGPSでセットされた値を取得
             const lat = document.getElementById('lat').value;
             const lng = document.getElementById('lng').value;
             const count = document.getElementById('count').value;
@@ -166,13 +169,7 @@
         }
 
         function clearForm() {
-            // 保存後、座標もクリアするかは運用の好みですが、
-            // 連続入力の可能性を考え、座標は残し、丸太情報だけクリアするのが便利かもしれません。
-            // 今回は以前の仕様通りすべてクリアせず、丸太情報のみクリアします。
-            // もし座標もクリアしたい場合は以下のコメントアウトを外してください。
-            // document.getElementById('lat').value = "";
-            // document.getElementById('lng').value = "";
-            
+            // 丸太情報のみクリア（座標は連続入力のために残す設定）
             document.getElementById('count').value = "";
             document.getElementById('volume').value = "";
             document.getElementById('memo').value = "";
@@ -189,16 +186,24 @@
             dataList.forEach(item => {
                 const row = document.createElement('tr');
                 row.className = `status-${item.status}`;
+                
+                // ▼▼▼ 変更点：表示桁数を6桁（toFixed(6)）に変更 ▼▼▼
+                const latDisplay = parseFloat(item.lat).toFixed(6);
+                const lngDisplay = parseFloat(item.lng).toFixed(6);
+                
                 row.innerHTML = `
                     <td>${item.timestamp}</td>
-                    <td>${parseFloat(item.lat).toFixed(4)},<br>${parseFloat(item.lng).toFixed(4)}</td>
+                    <td>${latDisplay}<br>${lngDisplay}</td>
                     <td>${item.count}</td>
                     <td>${item.volume}</td>
                     <td>${item.memo}</td>
                     <td>
-                        <button class="btn-request" onclick="sendEmail(${item.id})">依頼</button>
-                        <button class="btn-status" onclick="updateStatus(${item.id}, 'scheduled')">予定</button>
-                        <button class="btn-finish" onclick="updateStatus(${item.id}, 'completed')">終了</button>
+                        <div class="action-buttons">
+                            <button class="btn-request" onclick="sendEmail(${item.id})">依頼</button>
+                            <button class="btn-status" onclick="updateStatus(${item.id}, 'scheduled')">予定</button>
+                            <button class="btn-finish" onclick="updateStatus(${item.id}, 'completed')">終了</button>
+                            <button class="btn-delete" onclick="deleteData(${item.id})">削除</button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -212,28 +217,40 @@
                 dataList[index].status = newStatus;
                 localStorage.setItem('yamaDeliveryData', JSON.stringify(dataList));
                 renderTable();
-                // もし地図が開いていれば更新
                 if(document.getElementById('map-container').style.display === 'block'){
                     showAllMap();
                 }
             }
         }
+        
+        // ▼▼▼ 追加機能：1行削除 ▼▼▼
+        function deleteData(id) {
+            if(!confirm("このデータを削除してもよろしいですか？（復元できません）")) return;
+            
+            let dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
+            // 指定ID以外のデータを残す＝指定IDを削除
+            dataList = dataList.filter(d => d.id !== id);
+            
+            localStorage.setItem('yamaDeliveryData', JSON.stringify(dataList));
+            renderTable();
+            if(document.getElementById('map-container').style.display === 'block'){
+                showAllMap();
+            }
+        }
 
-        // --- メール送信（URL修正済み） ---
+        // --- メール送信 ---
         function sendEmail(id) {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             const item = dataList.find(d => d.id === id);
             if (!item) return;
 
-            // 標準的なGoogleマップURL形式
             const mapUrl = `https://maps.google.com/?q=${item.lat},${item.lng}`;
-            
             const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n${mapUrl}`;
 
             window.location.href = `mailto:?subject=配送依頼_${item.timestamp}&body=${encodeURIComponent(bodyText)}`;
         }
 
-        // --- 地図表示（Leaflet使用） ---
+        // --- 地図表示 ---
         let map = null;
         function showAllMap() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
@@ -244,7 +261,6 @@
 
             document.getElementById('map-container').style.display = 'block';
 
-            // マップ初期化（初回のみ）
             if (!map) {
                 map = L.map('map');
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -252,21 +268,18 @@
                 }).addTo(map);
             }
 
-            // 既存のピンを削除（再描画のため）
             map.eachLayer((layer) => {
                 if (layer instanceof L.CircleMarker) {
                     map.removeLayer(layer);
                 }
             });
 
-            // ピンを立てる
             const bounds = [];
             dataList.forEach(item => {
-                // ステータスごとの色設定
-                let color = 'red'; // 未定
+                let color = 'red'; 
                 let statusText = '未定';
-                if (item.status === 'scheduled') { color = '#fbc02d'; statusText = '予定'; } // 黄色
-                if (item.status === 'completed') { color = 'gray'; statusText = '終了'; }   // グレー
+                if (item.status === 'scheduled') { color = '#fbc02d'; statusText = '予定'; } 
+                if (item.status === 'completed') { color = 'gray'; statusText = '終了'; }   
 
                 const marker = L.circleMarker([item.lat, item.lng], {
                     color: color,
@@ -285,7 +298,6 @@
                 bounds.push([item.lat, item.lng]);
             });
 
-            // すべてのピンが収まるようにズーム調整
             if (bounds.length > 0) {
                 map.fitBounds(bounds);
             }
@@ -311,7 +323,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `yama_delivery_v1.1_${new Date().getTime()}.csv`;
+            link.download = `yama_delivery_v1.2_${new Date().getTime()}.csv`;
             link.click();
         }
 
@@ -344,4 +356,3 @@
     </script>
 </body>
 </html>
-
