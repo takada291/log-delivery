@@ -24,6 +24,9 @@
         .btn-status { background-color: #7b1fa2; font-size: 0.75rem; padding: 5px; }
         .btn-finish { background-color: #455a64; font-size: 0.75rem; padding: 5px; }
         
+        .instructions { background: #e3f2fd; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; border-left: 5px solid #2196f3; }
+        .instructions p { margin: 5px 0; line-height: 1.4; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 0.8rem; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #e8f5e9; position: sticky; top: 0; }
@@ -33,7 +36,7 @@
         .status-scheduled { background-color: #fff9c4; } /* 薄い黄色 */
         .status-completed { background-color: #cfd8dc; color: #78909c; text-decoration: line-through; } /* 薄いグレー */
 
-        .scroll-container { overflow-x: auto; max-height: 400px; border: 1px solid #ccc; }
+        .scroll-container { overflow-x: auto; max-height: 500px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -53,6 +56,12 @@
         <textarea id="memo" rows="2" placeholder="備考欄（現場状況など）"></textarea>
 
         <button class="btn-save" onclick="saveData()">（3）データを保存</button>
+    </div>
+
+    <div class="instructions">
+        <p>1.”依頼”ボタンを押すと材積等が自動入力されたメールが起動します。相手先のメルアドを選んで送信してください。</p>
+        <p>2.荷受けする旨のメールが返信された場合は”予定”ボタンを押します。該当行が黄色表示に変更されます。</p>
+        <p>3.荷受けが終了したら”終了”ボタンを押します。該当行が見え消しされます。</p>
     </div>
 
     <div class="admin-controls">
@@ -117,7 +126,7 @@
                 id: Date.now(),
                 timestamp,
                 lat, lng, count, volume, memo,
-                status: 'default' // default, scheduled, completed
+                status: 'default' 
             };
 
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
@@ -135,9 +144,13 @@
             document.getElementById('memo').value = "";
         }
 
-        // テーブル表示
+        // テーブル表示（降順並び替え）
         function renderTable() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
+            
+            // ID（タイムスタンプベース）で降順にソート（新しいものが上）
+            dataList.sort((a, b) => b.id - a.id);
+
             const tbody = document.querySelector('#dataTable tbody');
             tbody.innerHTML = "";
 
@@ -177,13 +190,13 @@
             const item = dataList.find(d => d.id === id);
             if (!item) return;
 
-            const mapUrl = `https://www.google.com/maps?q=${item.lat},${item.lng}(材積:${item.volume}m3/${item.count}本)`;
+            const mapUrl = `https://www.google.com/maps/@?api=1&map_action=map&center=lat,lng&zoom=151{item.lat},${item.lng}(材積:${item.volume}m3/${item.count}本)`;
             const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n${mapUrl}`;
 
             window.location.href = `mailto:?subject=配送依頼_${item.timestamp}&body=${encodeURIComponent(bodyText)}`;
         }
 
-        // CSV出力
+        // CSV出力（日本語化対応）
         function exportCSV() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             if (dataList.length === 0) {
@@ -191,9 +204,16 @@
                 return;
             }
 
-            let csvContent = "\uFEFF日時,緯度,経度,本数,材積,備考,ステータス\n";
-            dataList.forEach(d => {
-                csvContent += `${d.timestamp},${d.lat},${d.lng},${d.count},${d.volume},"${d.memo.replace(/"/g, '""')}",${d.status}\n`;
+            // ヘッダー（ステータス → 現在の状況）
+            let csvContent = "\uFEFF日時,緯度,経度,本数,材積,備考,現在の状況\n";
+            
+            dataList.sort((a, b) => b.id - a.id).forEach(d => {
+                // ステータスを日本語に変換
+                let statusJp = "未定";
+                if (d.status === 'scheduled') statusJp = "予定";
+                if (d.status === 'completed') statusJp = "終了";
+
+                csvContent += `${d.timestamp},${d.lat},${d.lng},${d.count},${d.volume},"${d.memo.replace(/"/g, '""')}",${statusJp}\n`;
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
