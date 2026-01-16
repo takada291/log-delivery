@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送v1.5</title>
+    <title>山の配送v1.6</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -76,11 +76,11 @@
 </head>
 <body>
 
-    <h1>🌲 山の配送v1.5</h1>
+    <h1>🌲 山の配送v1.6</h1>
 
     <div id="drop-zone">
         <p>📂 CSVファイルをここにドラッグ＆ドロップ</p>
-        <small>現場から届いたCSVを読み込みます</small>
+        <small>PCで管理する場合は現場から届いたCSVをデータ一覧へ読み込みます</small>
     </div>
     <div class="input-group">
         <button class="btn-gps" onclick="getLocation()">（1）現在地を取得</button>
@@ -171,7 +171,14 @@
             }
 
             const now = new Date();
-            const timestamp = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+            // ▼ 日付の0埋め対応（例: 2023/1/1 → 2023/01/01）
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const date = now.getDate().toString().padStart(2, '0');
+            const hour = now.getHours().toString().padStart(2, '0');
+            const min = now.getMinutes().toString().padStart(2, '0');
+            
+            const timestamp = `${year}/${month}/${date} ${hour}:${min}`;
 
             const newData = {
                 id: Date.now(),
@@ -198,7 +205,10 @@
         // --- テーブル表示 ---
         function renderTable() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
-            dataList.sort((a, b) => b.id - a.id); 
+            
+            // ▼ 保存日時の文字列（YYYY/MM/DD HH:MM）を解釈して降順（新しい順）に並べ替え
+            // これにより、CSVで過去データを取り込んだ場合でも正しい日付順に並びます
+            dataList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
             const tbody = document.querySelector('#dataTable tbody');
             tbody.innerHTML = "";
@@ -329,7 +339,11 @@
             }
 
             let csvContent = "\uFEFF日時,緯度,経度,本数,材積,備考,現在の状況\n";
-            dataList.sort((a, b) => b.id - a.id).forEach(d => {
+            
+            // CSV出力時も日付降順に統一
+            dataList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            dataList.forEach(d => {
                 let statusJp = "未定";
                 if (d.status === 'scheduled') statusJp = "予定";
                 if (d.status === 'completed') statusJp = "終了";
@@ -340,7 +354,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `yama_delivery_v1.4_${new Date().getTime()}.csv`;
+            link.download = `yama_delivery_v1.5_${new Date().getTime()}.csv`;
             link.click();
         }
 
@@ -390,26 +404,20 @@
             let importedCount = 0;
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
 
-            // 1行目はヘッダーなのでスキップ (i=1から開始)
+            // 1行目はヘッダーなのでスキップ
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
 
-                // 簡易パース: メモ欄のダブルクォート対策など簡易的に実装
-                // CSV形式: 日時,緯度,経度,本数,材積,"備考",現在の状況
-                // 正規表現で分割（引用符内のカンマを無視）
                 const match = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
                 if (!match || match.length < 7) continue;
 
                 const values = match.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
 
-                // ステータス日本語を英語コードに戻す
                 let statusCode = 'default';
                 if (values[6] === '予定') statusCode = 'scheduled';
                 if (values[6] === '終了') statusCode = 'completed';
 
-                // 重複チェック（日時と座標が完全に一致したらスキップするなど）
-                // 簡易的に「全く同じデータ」は追加しないようにします
                 const isDuplicate = dataList.some(d => 
                     d.timestamp === values[0] && 
                     d.lat == values[1] && 
@@ -418,7 +426,7 @@
 
                 if (!isDuplicate) {
                     const newData = {
-                        id: Date.now() + i, // ユニークID生成
+                        id: Date.now() + i, 
                         timestamp: values[0],
                         lat: values[1],
                         lng: values[2],
