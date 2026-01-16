@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送v1.4</title>
+    <title>山の配送v1.5</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -17,6 +17,25 @@
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
         
+        /* ドロップエリアのスタイル */
+        #drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            color: #888;
+            background-color: #fafafa;
+            margin-bottom: 20px;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        #drop-zone.dragover {
+            background-color: #e8f5e9;
+            border-color: #2e7d32;
+            color: #2e7d32;
+        }
+        #drop-zone p { margin: 0; font-weight: bold; }
+        #drop-zone small { font-size: 0.8rem; }
+
         /* 緯度経度用の横並びスタイル */
         .coord-row { display: flex; gap: 10px; }
         .coord-row input { width: 50%; }
@@ -31,7 +50,6 @@
         .btn-clear { background-color: #8d6e63; flex: 1; font-size: 0.9rem; min-width: 80px; }
         .btn-map { background-color: #00897b; flex: 1; font-size: 0.9rem; min-width: 80px; }
 
-        /* 行内の操作ボタン */
         .action-buttons { display: flex; flex-direction: column; gap: 5px; }
         .btn-request { background-color: #f57c00; font-size: 0.75rem; padding: 5px 10px; }
         .btn-status { background-color: #7b1fa2; font-size: 0.75rem; padding: 5px 10px; }
@@ -41,7 +59,6 @@
         .instructions { background: #e3f2fd; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; border-left: 5px solid #2196f3; }
         .instructions p { margin: 5px 0; line-height: 1.4; }
 
-        /* 地図エリア */
         #map-container { display: none; margin-bottom: 20px; border: 2px solid #2e7d32; border-radius: 8px; overflow: hidden; }
         #map { height: 400px; width: 100%; }
         .close-map { background: #ccc; color: #333; text-align: center; padding: 5px; cursor: pointer; font-size: 0.9rem; }
@@ -59,33 +76,37 @@
 </head>
 <body>
 
-    <h1>🌲 山の配送v1.4</h1>
+    <h1>🌲 山の配送v1.5</h1>
 
+    <div id="drop-zone">
+        <p>📂 CSVファイルをここにドラッグ＆ドロップ</p>
+        <small>現場から届いたCSVを読み込みます</small>
+    </div>
     <div class="input-group">
         <button class="btn-gps" onclick="getLocation()">（1）現在地を取得</button>
         <p id="status-info" style="font-size: 0.8rem; color: #666; margin: 5px 0;">座標: 未取得（ボタンまたは手入力）</p>
         
-        <label>座標入力（度単位・小数第6位まで）</label>
+        <label>（2）座標入力（度単位・小数第6位まで）</label>
         <div class="coord-row">
             <input type="number" id="lat" step="0.000001" placeholder="緯度 (例:35.123456)">
             <input type="number" id="lng" step="0.000001" placeholder="経度 (例:139.654321)">
         </div>
 
-        <label>（2）丸太情報入力</label>
+        <label>（3）丸太情報入力</label>
         <input type="number" id="count" placeholder="本数">
         <input type="number" id="volume" step="0.001" placeholder="材積（m3）">
         <textarea id="memo" rows="2" placeholder="備考欄（現場状況など）"></textarea>
 
-        <button class="btn-save" onclick="saveData()">（3）データを保存</button>
+        <button class="btn-save" onclick="saveData()">（4）データを保存</button>
     </div>
 
     <div class="instructions">
-        <p>（4）データ一覧で進捗管理</p>
-        <p>　・[依頼] メール起動</p>
+        <p>（5）データ一覧で進捗管理</p>
+        <p>　・[依頼] メール起動（※ファイル添付は手動）</p>
         <p>　・[予定] 荷受連絡あり（黄色）</p>
         <p>　・[終了] 完了（見え消し）</p>
         <p>　・[削除] 行データを削除</p>
-        <p>　・[位置を確認] 地図で状況可視化（未;赤,予定;黄,終了;灰）</p>
+        <p>　・[位置を確認] 地図で状況可視化(未;赤,予定;黄,済;灰)</p>
     </div>
 
     <div id="map-container">
@@ -246,7 +267,7 @@
             window.location.href = `mailto:?subject=配送依頼_${item.timestamp}&body=${encodeURIComponent(bodyText)}`;
         }
 
-        // --- 地図表示（地理院地図へ変更済み） ---
+        // --- 地図表示（地理院地図） ---
         let map = null;
         function showAllMap() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
@@ -259,12 +280,9 @@
 
             if (!map) {
                 map = L.map('map');
-                
-                // ▼▼▼ 変更点：国土地理院地図（標準）を設定 ▼▼▼
                 L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
+                    attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
                 }).addTo(map);
-                // ▲▲▲ 変更点ここまで ▲▲▲
             }
 
             map.eachLayer((layer) => {
@@ -322,7 +340,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `yama_delivery_v1.3_${new Date().getTime()}.csv`;
+            link.download = `yama_delivery_v1.4_${new Date().getTime()}.csv`;
             link.click();
         }
 
@@ -337,22 +355,98 @@
             }
         }
 
+        // ▼▼▼ ドラッグ＆ドロップ処理 ▼▼▼
+        const dropZone = document.getElementById('drop-zone');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.name.endsWith('.csv')) {
+                alert("CSVファイルをドロップしてください");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                importCSV(text);
+            };
+            reader.readAsText(file);
+        });
+
+        function importCSV(csvText) {
+            const lines = csvText.split('\n');
+            let importedCount = 0;
+            const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
+
+            // 1行目はヘッダーなのでスキップ (i=1から開始)
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                // 簡易パース: メモ欄のダブルクォート対策など簡易的に実装
+                // CSV形式: 日時,緯度,経度,本数,材積,"備考",現在の状況
+                // 正規表現で分割（引用符内のカンマを無視）
+                const match = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
+                if (!match || match.length < 7) continue;
+
+                const values = match.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+                // ステータス日本語を英語コードに戻す
+                let statusCode = 'default';
+                if (values[6] === '予定') statusCode = 'scheduled';
+                if (values[6] === '終了') statusCode = 'completed';
+
+                // 重複チェック（日時と座標が完全に一致したらスキップするなど）
+                // 簡易的に「全く同じデータ」は追加しないようにします
+                const isDuplicate = dataList.some(d => 
+                    d.timestamp === values[0] && 
+                    d.lat == values[1] && 
+                    d.lng == values[2]
+                );
+
+                if (!isDuplicate) {
+                    const newData = {
+                        id: Date.now() + i, // ユニークID生成
+                        timestamp: values[0],
+                        lat: values[1],
+                        lng: values[2],
+                        count: values[3],
+                        volume: values[4],
+                        memo: values[5],
+                        status: statusCode
+                    };
+                    dataList.push(newData);
+                    importedCount++;
+                }
+            }
+
+            localStorage.setItem('yamaDeliveryData', JSON.stringify(dataList));
+            alert(`${importedCount}件のデータを読み込みました`);
+            renderTable();
+        }
+
         renderTable();
+
     </script>
 
     <script>
-        // Service Workerの登録
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then((registration) => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    }, (err) => {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
+                navigator.serviceWorker.register('./sw.js');
             });
         }
     </script>
 </body>
 </html>
-
