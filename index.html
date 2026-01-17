@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山の配送v1.7</title>
+    <title>山の配送v1.8</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -50,17 +50,12 @@
         .btn-clear { background-color: #8d6e63; flex: 1; font-size: 0.9rem; min-width: 80px; }
         .btn-map { background-color: #00897b; flex: 1; font-size: 0.9rem; min-width: 80px; }
 
-        /* ▼▼▼ 配色変更箇所 ▼▼▼ */
+        /* ボタン配色 */
         .action-buttons { display: flex; flex-direction: column; gap: 5px; }
-        /* 依頼：赤 */
         .btn-request { background-color: #d32f2f; color: white; font-size: 0.75rem; padding: 5px 10px; }
-        /* 予定：黄色（文字は黒で見やすく） */
         .btn-status { background-color: #fbc02d; color: #333; font-size: 0.75rem; padding: 5px 10px; font-weight: bold; }
-        /* 終了：グレー（変更なし） */
         .btn-finish { background-color: #455a64; color: white; font-size: 0.75rem; padding: 5px 10px; }
-        /* 削除：紫 */
         .btn-delete { background-color: #7b1fa2; color: white; font-size: 0.75rem; padding: 5px 10px; } 
-        /* ▲▲▲ 配色変更箇所ここまで ▲▲▲ */
         
         .instructions { background: #e3f2fd; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; border-left: 5px solid #2196f3; }
         .instructions p { margin: 5px 0; line-height: 1.4; }
@@ -73,7 +68,6 @@
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
         th { background-color: #e8f5e9; position: sticky; top: 0; }
         
-        /* 行のインタラクション用 */
         tr:hover { background-color: #f1f8e9; cursor: pointer; }
 
         .status-default { background-color: #fff; }
@@ -85,7 +79,7 @@
 </head>
 <body>
 
-    <h1>🌲 山の配送v1.7</h1>
+    <h1>🌲 山の配送v1.8</h1>
 
     <div id="drop-zone">
         <p>📂 PCの場合はCSVファイルをここにドラッグ＆ドロップ</p>
@@ -222,10 +216,7 @@
                 const row = document.createElement('tr');
                 row.className = `status-${item.status}`;
                 
-                // ▼▼▼ 行クリック時のズーム機能追加 ▼▼▼
-                // ボタンを押した時以外（行そのものをタップした時）に発動するように設定
                 row.onclick = (e) => {
-                    // もしクリックされた要素がボタンなら何もしない（ボタンの処理に任せる）
                     if (e.target.tagName === 'BUTTON') return;
                     focusOnPin(item.lat, item.lng);
                 };
@@ -252,15 +243,10 @@
             });
         }
 
-        // ▼▼▼ ズーム機能の実装 ▼▼▼
         function focusOnPin(lat, lng) {
             const mapContainer = document.getElementById('map-container');
-            // 地図が表示されている場合のみ動作
             if (mapContainer.style.display === 'block' && map) {
-                // 指定座標へズームイン（ズームレベル18）
                 map.setView([lat, lng], 18);
-                // 必要であれば地図までスクロール（お好みでコメントアウト解除）
-                // mapContainer.scrollIntoView({behavior: "smooth", block: "center"});
             }
         }
 
@@ -290,19 +276,20 @@
             }
         }
 
-        // --- メール送信 ---
+        // --- メール送信（修正版） ---
         function sendEmail(id) {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
             const item = dataList.find(d => d.id === id);
             if (!item) return;
 
+            // ▼▼▼ 修正: URLを < > で囲み、メールソフトでのリンク認識率を上げる ▼▼▼
             const mapUrl = `https://maps.google.com/?q=${item.lat},${item.lng}`;
-            const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n${mapUrl}`;
+            const bodyText = `【配送依頼】\n日時: ${item.timestamp}\n本数: ${item.count}本\n材積: ${item.volume}m3\n備考: ${item.memo}\n\n場所(GoogleMap):\n<${mapUrl}>`;
 
             window.location.href = `mailto:?subject=配送依頼_${item.timestamp}&body=${encodeURIComponent(bodyText)}`;
         }
 
-        // --- 地図表示（地理院地図） ---
+        // --- 地図表示 ---
         let map = null;
         function showAllMap() {
             const dataList = JSON.parse(localStorage.getItem('yamaDeliveryData') || '[]');
@@ -330,7 +317,7 @@
             dataList.forEach(item => {
                 let color = 'red'; 
                 let statusText = '未定';
-                if (item.status === 'scheduled') { color = '#fbc02d'; statusText = '予定'; } // 黄色
+                if (item.status === 'scheduled') { color = '#fbc02d'; statusText = '予定'; } 
                 if (item.status === 'completed') { color = 'gray'; statusText = '終了'; }   
 
                 const marker = L.circleMarker([item.lat, item.lng], {
@@ -350,7 +337,6 @@
                 bounds.push([item.lat, item.lng]);
             });
 
-            // ピン全体が表示されるように調整（リセット機能も兼ねる）
             if (bounds.length > 0) {
                 map.fitBounds(bounds);
             }
@@ -378,7 +364,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `yama_delivery_v1.7_${new Date().getTime()}.csv`;
+            link.download = `yama_delivery_v1.8_${new Date().getTime()}.csv`;
             link.click();
         }
 
@@ -393,7 +379,7 @@
             }
         }
 
-        // ▼▼▼ ドラッグ＆ドロップ処理 ▼▼▼
+        // --- ドラッグ＆ドロップ ---
         const dropZone = document.getElementById('drop-zone');
 
         dropZone.addEventListener('dragover', (e) => {
