@@ -1,4 +1,4 @@
-const CACHE_NAME = 'log-delivery-v1.8.0-cache';// 2026.01.17 18:38
+const CACHE_NAME = 'log-delivery-v1.8.1-cache';// 2026.01.18 15:11
 const urlsToCache = [
   './',
   './index.html', // HTMLファイル名がindex.htmlでない場合はここを修正
@@ -54,6 +54,7 @@ self.addEventListener('activate', (event) => {
     ])
   );
 });
+
 
 
 
